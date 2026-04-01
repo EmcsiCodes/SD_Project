@@ -35,7 +35,14 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser = subparsers.add_parser("search", help="Search indexed files.")
     search_parser.add_argument("query", help="Text to search for.")
     search_parser.add_argument("--db", default=".local_search.db", help="SQLite DB file.")
-    search_parser.add_argument("--limit", type=int, default=10, help="Max number of results.")
+    search_parser.add_argument(
+        "--limit",
+        type=int,
+        nargs="?",
+        const=10,
+        default=10,
+        help="Max number of results (optional value, default 10).",
+    )
     search_parser.add_argument("--filename-only", action="store_true", help="Search only in file names.")
     search_parser.add_argument("--content-only", action="store_true", help="Search only in file content.")
     return parser

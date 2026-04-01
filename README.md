@@ -36,6 +36,11 @@ python -m src.main index . --db .local_search.db
 python -m src.main search "architecture" --db .local_search.db --limit 10
 ```
 
+`--limit` can also be used without a value and defaults to 10:
+```powershell
+python -m src.main search "architecture" --db .local_search.db --limit
+```
+
 ## Useful Options
 - `index --ignore-ext ".png,.jpg" --ignore-path "*node_modules*"`
 - `index --max-file-size-mb 5`
