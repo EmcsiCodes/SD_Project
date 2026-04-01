@@ -75,12 +75,10 @@ Persistence components:
 ## C4 - Code/Class View (Suggested Modules)
 ```text
 src/
-  app/         main, config
-  indexing/    crawler, policy, inspector, extractor, writer, reporter
-  query/       parser, service, ranking, snippets, formatter
-  persistence/ db, schema, repositories
-  domain/      indexed_document, search_query, search_result
-  common/      errors, logging, utils
+  main.py             CLI orchestration
+  indexing_engine.py  indexing pipeline
+  query_engine.py     search pipeline
+  database.py         schema + persistence
 ```
 
 Core domain objects:
