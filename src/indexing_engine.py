@@ -44,6 +44,7 @@ class IndexingEngine:
         ignore_patterns: list[str] | None = None,
         include_hidden: bool = False,
         max_file_size_mb: int = 2,
+        progress_every: int = 250,
     ) -> dict[str, int | float]:
         ignore_extensions = {ext.lower() for ext in (ignore_extensions or set())}
         ignore_patterns = ignore_patterns or []
@@ -61,6 +62,30 @@ class IndexingEngine:
             "errors_count": 0,
             "duration_seconds": 0.0,
         }
+        progress_every = max(0, progress_every)
+        last_progress_seen = -1
+
+        def print_progress(force: bool = False) -> None:
+            nonlocal last_progress_seen
+            if progress_every == 0:
+                return
+            if not force and report["files_seen"] % progress_every != 0:
+                return
+            if report["files_seen"] == last_progress_seen:
+                return
+            elapsed = max(time.monotonic() - started, 0.001)
+            rate = report["files_seen"] / elapsed
+            print(
+                "[progress] "
+                f"seen={report['files_seen']} "
+                f"indexed={report['files_indexed']} "
+                f"skipped={report['files_skipped']} "
+                f"errors={report['errors_count']} "
+                f"elapsed={elapsed:.1f}s "
+                f"rate={rate:.1f} files/s",
+                flush=True,
+            )
+            last_progress_seen = report["files_seen"]
 
         for current_dir, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
             filtered_dirs: list[str] = []
@@ -101,8 +126,11 @@ class IndexingEngine:
                         type(exc).__name__,
                         str(exc) or repr(exc),
                     )
+                finally:
+                    print_progress()
 
         report["duration_seconds"] = round(time.monotonic() - started, 3)
+        print_progress(force=True)
         self.database.finish_run(run_id, report)
         return report
 

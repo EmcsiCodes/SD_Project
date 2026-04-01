@@ -45,5 +45,6 @@ python -m src.main search "architecture" --db .local_search.db --limit
 - `index --ignore-ext ".png,.jpg" --ignore-path "*node_modules*"`
 - `index --max-file-size-mb 5`
 - `index --include-hidden`
+- `index --progress-every 100` (print indexing progress every 100 seen files, use `0` to disable)
 - `search --filename-only`
 - `search --content-only`

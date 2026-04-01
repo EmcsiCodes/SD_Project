@@ -31,6 +31,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     index_parser.add_argument("--include-hidden", action="store_true", help="Include hidden files/folders.")
     index_parser.add_argument("--max-file-size-mb", type=int, default=2, help="Skip files bigger than this size.")
+    index_parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=250,
+        help="Print progress every N seen files (0 disables).",
+    )
 
     search_parser = subparsers.add_parser("search", help="Search indexed files.")
     search_parser.add_argument("query", help="Text to search for.")
@@ -64,12 +70,19 @@ def parse_extensions(raw_values: list[str]) -> set[str]:
 def run_index(args: argparse.Namespace) -> int:
     database = Database(args.db)
     engine = IndexingEngine(database)
+    if args.progress_every > 0:
+        print(
+            f"Indexing '{args.root}' -> '{args.db}' "
+            f"(progress every {args.progress_every} files)",
+            flush=True,
+        )
     report = engine.index(
         root_path=args.root,
         ignore_extensions=parse_extensions(args.ignore_ext),
         ignore_patterns=args.ignore_path,
         include_hidden=args.include_hidden,
         max_file_size_mb=args.max_file_size_mb,
+        progress_every=args.progress_every,
     )
 
     print("Indexing complete.")
