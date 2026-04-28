@@ -59,11 +59,13 @@ class IndexingEngine:
             "files_seen": 0,
             "files_indexed": 0,
             "files_skipped": 0,
+            "files_deleted": 0,
             "errors_count": 0,
             "duration_seconds": 0.0,
         }
         progress_every = max(0, progress_every)
         last_progress_seen = -1
+        indexed_paths: set[str] = set()
 
         def print_progress(force: bool = False) -> None:
             nonlocal last_progress_seen
@@ -115,6 +117,7 @@ class IndexingEngine:
                         report["files_skipped"] += 1
                         continue
 
+                    indexed_paths.add(os.path.abspath(full_path))
                     file_row = self._build_file_row(full_path, size_bytes=size_bytes)
                     self.database.upsert_file(file_row)
                     report["files_indexed"] += 1
@@ -129,6 +132,12 @@ class IndexingEngine:
                 finally:
                     print_progress()
 
+        stale_paths = [
+            path
+            for path in self.database.list_paths_under_root(root)
+            if path not in indexed_paths
+        ]
+        report["files_deleted"] = self.database.delete_files(stale_paths)
         report["duration_seconds"] = round(time.monotonic() - started, 3)
         print_progress(force=True)
         self.database.finish_run(run_id, report)

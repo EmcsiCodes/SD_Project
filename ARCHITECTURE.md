@@ -34,7 +34,7 @@ Main interactions:
 3. Search Engine writes/reads indexed data in DBMS.
 
 ## C4 - Container View
-1. UI/CLI: accepts commands, shows progress/results/errors.
+1. Presentation Layer (CLI + local Web UI): accepts commands or form input, shows progress/results/errors.
 2. Indexing Engine: crawl -> filter -> inspect -> extract -> normalize -> store.
 3. Query Engine: parse query -> search DB -> rank -> build snippets -> format.
 4. Database: stores files/content/metadata/runs/errors; provides full-text search.
@@ -79,6 +79,8 @@ src/
   indexing_engine.py  indexing pipeline
   query_engine.py     search pipeline
   database.py         schema + persistence
+  ui_server.py        browser UI server + HTTP endpoints
+  ui/                 static browser assets
 ```
 
 Core domain objects:

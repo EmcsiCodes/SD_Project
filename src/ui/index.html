@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Local Search Studio</title>
+    <link rel="stylesheet" href="/app.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">Software Design Project</p>
+                <h1>Local Search Studio</h1>
+                <p class="hero-text">
+                    Index a real folder, search it quickly, and keep the results readable enough
+                    to demo confidently.
+                </p>
+            </div>
+            <div class="hero-card">
+                <p class="hero-card-label">Current workspace</p>
+                <p class="hero-card-value" id="working-directory">Loading...</p>
+                <p class="hero-card-note">The UI talks directly to the same Python engine as the CLI.</p>
+            </div>
+        </header>
+
+        <main class="workspace">
+            <aside class="panel control-panel">
+                <section class="section-block">
+                    <div class="section-heading">
+                        <p class="section-kicker">Step 1</p>
+                        <h2>Index Files</h2>
+                    </div>
+                    <form id="index-form" class="stack">
+                        <label class="field">
+                            <span>Folder to index</span>
+                            <input id="root" name="root" type="text" placeholder="E:\Projects\MyFolder" required>
+                        </label>
+
+                        <label class="field">
+                            <span>Database path</span>
+                            <input id="db-path" name="db_path" type="text" placeholder="E:\Projects\search.db" required>
+                        </label>
+
+                        <label class="field">
+                            <span>Ignore extensions</span>
+                            <input id="ignore-extensions" name="ignore_extensions" type="text" placeholder=".png,.jpg,.exe">
+                        </label>
+
+                        <label class="field">
+                            <span>Ignore path patterns</span>
+                            <textarea id="ignore-patterns" name="ignore_patterns" rows="3" placeholder="*node_modules*&#10;*.git*"></textarea>
+                        </label>
+
+                        <div class="inline-grid">
+                            <label class="field compact">
+                                <span>Max file size (MB)</span>
+                                <input id="max-file-size-mb" name="max_file_size_mb" type="number" min="1" value="2">
+                            </label>
+
+                            <label class="toggle-field">
+                                <input id="include-hidden" name="include_hidden" type="checkbox">
+                                <span>Include hidden files</span>
+                            </label>
+                        </div>
+
+                        <button id="index-button" class="primary-button" type="submit">Run Indexing</button>
+                    </form>
+                </section>
+
+                <section class="section-block">
+                    <div class="section-heading">
+                        <p class="section-kicker">Step 2</p>
+                        <h2>Search Results</h2>
+                    </div>
+                    <form id="search-form" class="stack">
+                        <label class="field">
+                            <span>Query</span>
+                            <input id="query" name="query" type="text" placeholder="architecture ranking path" required>
+                        </label>
+
+                        <div class="inline-grid">
+                            <label class="field compact">
+                                <span>Result limit</span>
+                                <input id="limit" name="limit" type="number" min="1" max="100" value="10">
+                            </label>
+
+                            <label class="field compact">
+                                <span>Scope</span>
+                                <select id="scope" name="scope">
+                                    <option value="all">Filename + content</option>
+                                    <option value="filename">Filename only</option>
+                                    <option value="content">Content only</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="button-row">
+                            <button id="search-button" class="primary-button" type="submit">Search</button>
+                            <button id="clear-button" class="secondary-button" type="button">Clear</button>
+                        </div>
+                    </form>
+                </section>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-header">
+                    <div>
+                        <p class="section-kicker">Live Status</p>
+                        <h2>Readable Results</h2>
+                    </div>
+                    <div id="status-banner" class="status-banner info">Loading configuration...</div>
+                </div>
+
+                <div id="report-grid" class="report-grid">
+                    <article class="metric-card">
+                        <p class="metric-label">Last index</p>
+                        <p class="metric-value">Not run yet</p>
+                    </article>
+                </div>
+
+                <div class="results-toolbar">
+                    <p id="results-summary" class="results-summary">Search results will appear here after the first query.</p>
+                </div>
+
+                <div id="results-list" class="results-list">
+                    <article class="empty-state">
+                        <h3>Start with indexing</h3>
+                        <p>Point the app at a real folder, then search it from the panel on the left.</p>
+                    </article>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from src.database import Database
+from src.input_parsing import parse_extensions
 from src.indexing_engine import IndexingEngine
 from src.query_engine import QueryEngine
+from src.ui_server import ServerConfig, serve_ui
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,20 +54,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_parser.add_argument("--filename-only", action="store_true", help="Search only in file names.")
     search_parser.add_argument("--content-only", action="store_true", help="Search only in file content.")
+
+    serve_parser = subparsers.add_parser("serve", help="Launch the browser UI.")
+    serve_parser.add_argument("--host", default="127.0.0.1", help="Host to bind.")
+    serve_parser.add_argument("--port", type=int, default=8765, help="Port to bind.")
+    serve_parser.add_argument("--db", default=".local_search.db", help="Default SQLite DB file.")
+    serve_parser.add_argument("--root", default=".", help="Default folder shown in the UI.")
+    serve_parser.add_argument("--open-browser", action="store_true", help="Open the UI in the browser.")
     return parser
-
-
-def parse_extensions(raw_values: list[str]) -> set[str]:
-    extensions: set[str] = set()
-    for value in raw_values:
-        for part in value.split(","):
-            ext = part.strip().lower()
-            if not ext:
-                continue
-            if not ext.startswith("."):
-                ext = f".{ext}"
-            extensions.add(ext)
-    return extensions
 
 
 def run_index(args: argparse.Namespace) -> int:
@@ -89,6 +86,7 @@ def run_index(args: argparse.Namespace) -> int:
     print(f"Files seen:    {report['files_seen']}")
     print(f"Files indexed: {report['files_indexed']}")
     print(f"Files skipped: {report['files_skipped']}")
+    print(f"Files deleted: {report.get('files_deleted', 0)}")
     print(f"Errors:        {report['errors_count']}")
     print(f"Duration:      {report['duration_seconds']} s")
     return 0
@@ -112,6 +110,18 @@ def run_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_serve(args: argparse.Namespace) -> int:
+    config = ServerConfig(
+        host=args.host,
+        port=args.port,
+        default_root=os.path.abspath(args.root),
+        default_db=os.path.abspath(args.db),
+        open_browser=args.open_browser,
+    )
+    serve_ui(config)
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -119,6 +129,8 @@ def main() -> int:
         return run_index(args)
     if args.command == "search":
         return run_search(args)
+    if args.command == "serve":
+        return run_serve(args)
     parser.print_help()
     return 1
 

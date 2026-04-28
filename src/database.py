@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
@@ -169,6 +170,28 @@ class Database:
                     "INSERT INTO files_fts(path, filename, content_text) VALUES (?, ?, ?);",
                     (file_row["path"], file_row["filename"], file_row["content_text"]),
                 )
+
+    def list_paths_under_root(self, root_path: str) -> list[str]:
+        like_pattern = f"{root_path}{os.sep}%"
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT path
+                FROM files
+                WHERE path = ? OR path LIKE ?;
+                """,
+                (root_path, like_pattern),
+            ).fetchall()
+        return [str(row["path"]) for row in rows]
+
+    def delete_files(self, paths: list[str]) -> int:
+        if not paths:
+            return 0
+
+        with self._connect() as conn:
+            conn.executemany("DELETE FROM files_fts WHERE path = ?;", ((path,) for path in paths))
+            conn.executemany("DELETE FROM files WHERE path = ?;", ((path,) for path in paths))
+        return len(paths)
 
     def search_filename(self, terms: list[str], limit: int) -> list[dict[str, Any]]:
         if not terms:

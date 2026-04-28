@@ -108,8 +108,11 @@ class QueryEngine:
     def _combine_score(filename_score: float, bm25_rank: object) -> float:
         content_score = 0.0
         if bm25_rank is not None:
-            adjusted = max(float(bm25_rank), 0.0)
-            content_score = 40.0 / (1.0 + adjusted)
+            # SQLite FTS5 returns smaller-is-better BM25 values and they are
+            # commonly negative, so flip the sign and scale them into a simple
+            # positive relevance boost for display/sorting.
+            adjusted = max(-float(bm25_rank), 0.0)
+            content_score = min(adjusted * 10_000_000, 40.0)
         return round(filename_score + content_score, 2)
 
     @staticmethod
