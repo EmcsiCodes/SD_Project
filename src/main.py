@@ -6,7 +6,7 @@ import os
 from src.database import Database
 from src.input_parsing import parse_extensions
 from src.indexing_engine import IndexingEngine
-from src.query_engine import QueryEngine
+from src.query_engine import QueryEngine, RankingStrategy
 from src.ui_server import ServerConfig, serve_ui
 
 
@@ -54,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_parser.add_argument("--filename-only", action="store_true", help="Search only in file names.")
     search_parser.add_argument("--content-only", action="store_true", help="Search only in file content.")
+    search_parser.add_argument(
+        "--ranking",
+        choices=[strategy.value for strategy in RankingStrategy],
+        default=RankingStrategy.TFIDF.value,
+        help="Ranking strategy to use.",
+    )
 
     serve_parser = subparsers.add_parser("serve", help="Launch the browser UI.")
     serve_parser.add_argument("--host", default="127.0.0.1", help="Host to bind.")
@@ -99,7 +105,7 @@ def run_search(args: argparse.Namespace) -> int:
 
     database = Database(args.db)
     database.init_schema()
-    engine = QueryEngine(database)
+    engine = QueryEngine(database, ranking_strategy=args.ranking)
     results = engine.search(
         query_text=args.query,
         limit=max(1, args.limit),

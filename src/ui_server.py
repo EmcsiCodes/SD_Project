@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from src.database import Database
 from src.indexing_engine import IndexingEngine
 from src.input_parsing import parse_extensions, parse_patterns
-from src.query_engine import QueryEngine
+from src.query_engine import QueryEngine, RankingStrategy
 
 
 @dataclass(frozen=True)
@@ -128,6 +128,10 @@ class LocalSearchRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": f"Unsupported search scope: {scope}"})
             return
 
+        ranking_strategy = str(payload.get("ranking_strategy") or RankingStrategy.TFIDF.value).strip().lower()
+        if ranking_strategy not in {strategy.value for strategy in RankingStrategy}:
+            ranking_strategy = RankingStrategy.TFIDF.value
+
         db_path = str(payload.get("db_path") or self.server.config.default_db).strip()
         if not db_path:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Database path is required."})
@@ -140,7 +144,7 @@ class LocalSearchRequestHandler(BaseHTTPRequestHandler):
 
         database = Database(db_path)
         database.init_schema()
-        engine = QueryEngine(database)
+        engine = QueryEngine(database, ranking_strategy=ranking_strategy)
         results = engine.search(
             query_text=query,
             limit=limit,
