@@ -151,6 +151,7 @@ class IndexingEngine:
 
         content_text, preview_text, is_text = self._extract_text(path, extension, mime_type)
         status = "indexed" if is_text else "metadata_only"
+        path_score = self._compute_path_score(path, size_bytes, extension)
 
         return {
             "path": os.path.abspath(path),
@@ -165,6 +166,7 @@ class IndexingEngine:
             "preview_text": preview_text,
             "indexed_at": utc_now_iso(),
             "status": status,
+            "path_score": path_score,
         }
 
     def _extract_text(
@@ -229,6 +231,40 @@ class IndexingEngine:
         if mime_type and mime_type.startswith("text/"):
             return True
         return False
+
+    @staticmethod
+    def _compute_path_score(path: str, size_bytes: int, extension: str | None) -> float:
+        normalized = path.replace("\\", "/")
+        depth = normalized.count("/")
+        score = max(0.0, 20.0 - depth * 0.5)
+
+        preferred_extensions = {
+            ".py",
+            ".js",
+            ".ts",
+            ".java",
+            ".c",
+            ".cpp",
+            ".h",
+            ".md",
+            ".txt",
+            ".json",
+            ".xml",
+            ".yaml",
+            ".yml",
+            ".html",
+            ".css",
+        }
+        if extension and extension.lower() in preferred_extensions:
+            score += 10.0
+
+        size_kb = size_bytes / 1024
+        if 1 <= size_kb <= 10240:
+            score += 5.0
+        elif size_kb > 10240:
+            score -= 2.0
+
+        return round(score, 2)
 
     @staticmethod
     def _decode(raw: bytes) -> str:
