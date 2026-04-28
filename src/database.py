@@ -39,7 +39,10 @@ class Database:
                     content_text TEXT,
                     preview_text TEXT,
                     indexed_at TEXT NOT NULL,
-                    status TEXT NOT NULL
+                    status TEXT NOT NULL,
+                    path_score REAL NOT NULL DEFAULT 0.0,
+                    access_time TEXT,
+                    popularity_score INTEGER NOT NULL DEFAULT 0
                 );
                 """
             )
@@ -70,13 +73,53 @@ class Database:
                 );
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS search_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    query TEXT NOT NULL,
+                    searched_at TEXT NOT NULL,
+                    results_count INTEGER NOT NULL DEFAULT 0
+                );
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS click_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    query TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    rank INTEGER,
+                    score REAL,
+                    clicked_at TEXT NOT NULL
+                );
+                """
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_files_filename ON files(filename);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_search_history_query ON search_history(query);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_click_history_query ON click_history(query);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_click_history_path ON click_history(file_path);")
             conn.execute(
                 """
                 CREATE VIRTUAL TABLE IF NOT EXISTS files_fts
                 USING fts5(path UNINDEXED, filename, content_text, tokenize='unicode61');
                 """
             )
+
+            self._ensure_column(conn, "files", "path_score", "REAL NOT NULL DEFAULT 0.0")
+            self._ensure_column(conn, "files", "access_time", "TEXT")
+            self._ensure_column(conn, "files", "popularity_score", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column(conn, "search_history", "results_count", "INTEGER NOT NULL DEFAULT 0")
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, column_definition: str) -> None:
+        existing = {
+            str(row[1])
+            for row in conn.execute(f"PRAGMA table_info({table});").fetchall()
+        }
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_definition};")
 
     def start_run(self) -> int:
         with self._connect() as conn:
@@ -133,8 +176,9 @@ class Database:
                 """
                 INSERT INTO files (
                     path, filename, extension, size_bytes, created_at, modified_at,
-                    mime_type, is_text, content_text, preview_text, indexed_at, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    mime_type, is_text, content_text, preview_text, indexed_at, status,
+                    path_score, access_time, popularity_score
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(path) DO UPDATE SET
                     filename = excluded.filename,
                     extension = excluded.extension,
@@ -146,7 +190,10 @@ class Database:
                     content_text = excluded.content_text,
                     preview_text = excluded.preview_text,
                     indexed_at = excluded.indexed_at,
-                    status = excluded.status;
+                    status = excluded.status,
+                    path_score = excluded.path_score,
+                    access_time = excluded.access_time,
+                    popularity_score = excluded.popularity_score;
                 """,
                 (
                     file_row["path"],
@@ -161,6 +208,9 @@ class Database:
                     file_row["preview_text"],
                     file_row["indexed_at"],
                     file_row["status"],
+                    float(file_row.get("path_score", 0.0)),
+                    file_row.get("access_time"),
+                    int(file_row.get("popularity_score", 0)),
                 ),
             )
 
@@ -201,7 +251,8 @@ class Database:
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
-                SELECT path, filename, extension, size_bytes, modified_at, preview_text, content_text
+                SELECT path, filename, extension, size_bytes, modified_at, preview_text, content_text,
+                       path_score, access_time, popularity_score
                 FROM files
                 WHERE status IN ('indexed', 'metadata_only')
                   AND {conditions}
@@ -227,6 +278,9 @@ class Database:
                     f.modified_at,
                     f.preview_text,
                     f.content_text,
+                    f.path_score,
+                    f.access_time,
+                    f.popularity_score,
                     bm25(files_fts) AS bm25_rank
                 FROM files_fts
                 JOIN files f ON f.path = files_fts.path
@@ -237,3 +291,83 @@ class Database:
                 (fts_query, limit),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def search_paths(self, terms: list[str], limit: int) -> list[dict[str, Any]]:
+        if not terms:
+            return []
+        conditions = " AND ".join("lower(path) LIKE ?" for _ in terms)
+        params: list[Any] = [f"%{term.lower()}%" for term in terms] + [limit]
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT path, filename, extension, size_bytes, modified_at, preview_text, content_text,
+                       path_score, access_time, popularity_score
+                FROM files
+                WHERE status IN ('indexed', 'metadata_only')
+                  AND {conditions}
+                ORDER BY path_score DESC, modified_at DESC
+                LIMIT ?;
+                """,
+                params,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def add_search_history(self, query: str, searched_at: str, results_count: int = 0) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO search_history(query, searched_at, results_count) VALUES (?, ?, ?);",
+                (query, searched_at, int(results_count)),
+            )
+
+    def add_click_history(
+        self,
+        query: str,
+        file_path: str,
+        rank: int,
+        score: float,
+        clicked_at: str,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO click_history(query, file_path, rank, score, clicked_at) VALUES (?, ?, ?, ?, ?);",
+                (query, file_path, rank, score, clicked_at),
+            )
+
+    def get_recent_searches(self, limit: int = 10) -> list[str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT query
+                FROM search_history
+                ORDER BY searched_at DESC, id DESC
+                LIMIT ?;
+                """,
+                (limit,),
+            ).fetchall()
+        return [str(row["query"]) for row in rows]
+
+    def get_query_suggestions(self, prefix: str, limit: int = 5) -> list[str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT query
+                FROM search_history
+                WHERE lower(query) LIKE lower(?)
+                ORDER BY searched_at DESC, id DESC
+                LIMIT ?;
+                """,
+                (f"{prefix}%", limit),
+            ).fetchall()
+        return [str(row["query"]) for row in rows]
+
+    def increment_popularity(self, path: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE files
+                SET popularity_score = COALESCE(popularity_score, 0) + 1,
+                    access_time = ?
+                WHERE path = ?;
+                """,
+                (utc_now_iso(), path),
+            )
