@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any
 
 from src.database import Database, utc_now_iso
+from src.query_preprocessor import QueryBuilder, build_default_query_builder
 
 
 class RankingStrategy(str, Enum):
@@ -21,18 +22,19 @@ class ParsedQuery:
     """Parsed query with separated qualifier terms and implicit terms."""
     path_terms: list[str] = field(default_factory=list)
     content_terms: list[str] = field(default_factory=list)
+    color_terms: list[str] = field(default_factory=list)
     implicit_terms: list[str] = field(default_factory=list)
 
     def has_qualifiers(self) -> bool:
-        return bool(self.path_terms or self.content_terms)
+        return bool(self.path_terms or self.content_terms or self.color_terms)
 
     def all_terms(self) -> list[str]:
-        return self.path_terms + self.content_terms + self.implicit_terms
+        return self.path_terms + self.content_terms + self.color_terms + self.implicit_terms
 
 
 class QueryParser:
-    """Parse queries with path: and content: qualifiers."""
-    VALID_QUALIFIERS = {"path", "content"}
+    """Parse queries with path:, content:, and color: qualifiers."""
+    VALID_QUALIFIERS = {"path", "content", "color"}
 
     @classmethod
     def parse(cls, query_text: str) -> ParsedQuery:
@@ -60,8 +62,10 @@ class QueryParser:
             terms = cls._split_terms(value)
             if key == "path":
                 parsed.path_terms.extend(terms)
-            else:
+            elif key == "content":
                 parsed.content_terms.extend(terms)
+            else:
+                parsed.color_terms.extend(terms)
             consumed_spans.append(match.span())
 
         # Remaining text becomes implicit terms
@@ -71,6 +75,7 @@ class QueryParser:
         # Deduplicate all term lists
         parsed.path_terms = cls._deduplicate(parsed.path_terms)
         parsed.content_terms = cls._deduplicate(parsed.content_terms)
+        parsed.color_terms = cls._deduplicate(parsed.color_terms)
         parsed.implicit_terms = cls._deduplicate(parsed.implicit_terms)
         return parsed
 
@@ -181,10 +186,16 @@ def get_ranker(strategy: RankingStrategy | str) -> BaseRanker:
 
 class QueryEngine:
     """Search engine with qualified query parsing and pluggable ranking."""
-    def __init__(self, database: Database, ranking_strategy: RankingStrategy | str = RankingStrategy.TFIDF) -> None:
+    def __init__(
+        self,
+        database: Database,
+        ranking_strategy: RankingStrategy | str = RankingStrategy.TFIDF,
+        query_builder: QueryBuilder | None = None,
+    ) -> None:
         self.database = database
         self.ranking_strategy = ranking_strategy
         self.ranker = get_ranker(ranking_strategy)
+        self.query_builder = query_builder or build_default_query_builder()
 
     def set_ranking_strategy(self, ranking_strategy: RankingStrategy | str) -> None:
         self.ranking_strategy = ranking_strategy
@@ -198,9 +209,10 @@ class QueryEngine:
         content_only: bool = False,
     ) -> list[dict[str, object]]:
         """Parse the query, run the selected search path, and record history."""
-        parsed = QueryParser.parse(query_text)
+        processed_query = self.query_builder.build(query_text)
+        parsed = QueryParser.parse(processed_query)
         if not parsed.has_qualifiers():
-            results = self._legacy_search(query_text, limit, filename_only, content_only)
+            results = self._legacy_search(processed_query, limit, filename_only, content_only)
         else:
             results = self._qualified_search(parsed, limit, filename_only, content_only)
 
@@ -226,6 +238,9 @@ class QueryEngine:
         content_rows = []
         if content_terms and not filename_only:
             content_rows = self.database.search_content(content_terms, pool_size)
+        color_rows = []
+        if parsed.color_terms and not content_only:
+            color_rows = self.database.search_color(parsed.color_terms, pool_size)
 
         for row in path_rows:
             path = str(row["path"])
@@ -252,13 +267,28 @@ class QueryEngine:
                     candidate["bm25_rank"] = float(bm25_rank)
             candidate["path_score"] = max(float(candidate["path_score"]), float(row.get("path_score", 0.0)))
 
+        for row in color_rows:
+            path = str(row["path"])
+            candidate = candidates.setdefault(path, self._candidate_template(row))
+            candidate["matched_color"] = True
+            candidate["filename_score"] = max(
+                float(candidate["filename_score"]),
+                self._filename_score(str(row["filename"]), parsed.color_terms),
+            )
+            candidate["path_score"] = max(float(candidate["path_score"]), float(row.get("path_score", 0.0)))
+
         required_path = bool(parsed.path_terms and not content_only)
         required_content = bool(content_terms and not filename_only)
-        results = self._build_results(candidates, content_terms or parsed.path_terms)
+        required_color = bool(parsed.color_terms and not content_only)
+        results = self._build_results(candidates, parsed.all_terms())
         results = [
             result
             for result in results
-            if (not required_path or result["matched_path"]) and (not required_content or result["matched_content"])
+            if (
+                (not required_path or result["matched_path"])
+                and (not required_content or result["matched_content"])
+                and (not required_color or result["matched_color"])
+            )
         ]
         return self.ranker.rank(results)[:limit]
 
@@ -314,6 +344,7 @@ class QueryEngine:
             "path_depth": path.count("/") + path.count("\\"),
             "matched_path": False,
             "matched_content": False,
+            "matched_color": False,
         }
 
     def _build_results(self, candidates: dict[str, dict[str, Any]], search_terms: list[str]) -> list[dict[str, object]]:
@@ -334,13 +365,18 @@ class QueryEngine:
                     "filename_score": float(candidate.get("filename_score", 0.0)),
                     "bm25_rank": candidate.get("bm25_rank"),
                     "popularity_score": float(row.get("popularity_score", 0.0)),
+                    "file_type": row.get("file_type") or "other",
+                    "dominant_color": row.get("dominant_color"),
                     "matched_path": bool(candidate.get("matched_path")),
                     "matched_content": bool(candidate.get("matched_content")),
+                    "matched_color": bool(candidate.get("matched_color")),
                     "snippet": self._build_snippet(row.get("content_text"), search_terms, row.get("preview_text")),
                     "metadata": (
                         f"ext={row.get('extension') or '-'}, "
                         f"size={row.get('size_bytes') or 0} bytes, "
-                        f"modified={row.get('modified_at') or '-'}"
+                        f"modified={row.get('modified_at') or '-'}, "
+                        f"type={row.get('file_type') or 'other'}, "
+                        f"color={row.get('dominant_color') or '-'}"
                     ),
                 }
             )

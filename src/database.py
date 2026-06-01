@@ -49,7 +49,9 @@ class Database:
                     status TEXT NOT NULL,
                     path_score REAL NOT NULL DEFAULT 0.0,
                     access_time TEXT,
-                    popularity_score INTEGER NOT NULL DEFAULT 0
+                    popularity_score INTEGER NOT NULL DEFAULT 0,
+                    file_type TEXT NOT NULL DEFAULT 'other',
+                    dominant_color TEXT
                 );
                 """
             )
@@ -117,6 +119,8 @@ class Database:
             self._ensure_column(conn, "files", "path_score", "REAL NOT NULL DEFAULT 0.0")
             self._ensure_column(conn, "files", "access_time", "TEXT")
             self._ensure_column(conn, "files", "popularity_score", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column(conn, "files", "file_type", "TEXT NOT NULL DEFAULT 'other'")
+            self._ensure_column(conn, "files", "dominant_color", "TEXT")
             self._ensure_column(conn, "search_history", "results_count", "INTEGER NOT NULL DEFAULT 0")
 
     @staticmethod
@@ -184,8 +188,8 @@ class Database:
                 INSERT INTO files (
                     path, filename, extension, size_bytes, created_at, modified_at,
                     mime_type, is_text, content_text, preview_text, indexed_at, status,
-                    path_score, access_time, popularity_score
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    path_score, access_time, popularity_score, file_type, dominant_color
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(path) DO UPDATE SET
                     filename = excluded.filename,
                     extension = excluded.extension,
@@ -200,7 +204,9 @@ class Database:
                     status = excluded.status,
                     path_score = excluded.path_score,
                     access_time = COALESCE(files.access_time, excluded.access_time),
-                    popularity_score = files.popularity_score;
+                    popularity_score = files.popularity_score,
+                    file_type = excluded.file_type,
+                    dominant_color = excluded.dominant_color;
                 """,
                 (
                     file_row["path"],
@@ -218,6 +224,8 @@ class Database:
                     float(file_row.get("path_score", 0.0)),
                     file_row.get("access_time"),
                     int(file_row.get("popularity_score", 0)),
+                    str(file_row.get("file_type") or "other"),
+                    file_row.get("dominant_color"),
                 ),
             )
 
@@ -259,7 +267,7 @@ class Database:
             rows = conn.execute(
                 f"""
                 SELECT path, filename, extension, size_bytes, modified_at, preview_text, content_text,
-                       path_score, access_time, popularity_score
+                       path_score, access_time, popularity_score, file_type, dominant_color
                 FROM files
                 WHERE status IN ('indexed', 'metadata_only')
                   AND {conditions}
@@ -289,6 +297,8 @@ class Database:
                     f.path_score,
                     f.access_time,
                     f.popularity_score,
+                    f.file_type,
+                    f.dominant_color,
                     bm25(files_fts) AS bm25_rank
                 FROM files_fts
                 JOIN files f ON f.path = files_fts.path
@@ -320,7 +330,7 @@ class Database:
             rows = conn.execute(
                 f"""
                 SELECT path, filename, extension, size_bytes, modified_at, preview_text, content_text,
-                       path_score, access_time, popularity_score
+                       path_score, access_time, popularity_score, file_type, dominant_color
                 FROM files
                 WHERE status IN ('indexed', 'metadata_only')
                   AND {conditions}
@@ -328,6 +338,26 @@ class Database:
                 LIMIT ?;
                 """,
                 params,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def search_color(self, colors: list[str], limit: int) -> list[dict[str, Any]]:
+        normalized = [color.lower() for color in colors if color]
+        if not normalized:
+            return []
+        placeholders = ", ".join("?" for _ in normalized)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT path, filename, extension, size_bytes, modified_at, preview_text, content_text,
+                       path_score, access_time, popularity_score, file_type, dominant_color
+                FROM files
+                WHERE file_type = 'image'
+                  AND lower(dominant_color) IN ({placeholders})
+                ORDER BY modified_at DESC
+                LIMIT ?;
+                """,
+                [*normalized, limit],
             ).fetchall()
         return [dict(row) for row in rows]
 
