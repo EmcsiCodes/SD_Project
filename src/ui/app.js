@@ -23,6 +23,7 @@ const elements = {
     query: document.getElementById("query"),
     limit: document.getElementById("limit"),
     scope: document.getElementById("scope"),
+    rankingStrategy: document.getElementById("ranking-strategy"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -94,6 +95,7 @@ async function onSearchSubmit(event) {
             query: elements.query.value.trim(),
             limit: Number(elements.limit.value || 10),
             scope: elements.scope.value,
+            ranking_strategy: elements.rankingStrategy.value,
         };
         const response = await sendJson("/api/search", {
             method: "POST",
@@ -102,7 +104,7 @@ async function onSearchSubmit(event) {
         });
 
         state.lastResults = response.results || [];
-        renderResults(response.query, response.scope, state.lastResults);
+        renderResults(response.query, response.scope, response.ranking_strategy, state.lastResults);
         setStatus(
             "success",
             state.lastResults.length
@@ -161,8 +163,8 @@ function renderReport(report) {
         .join("");
 }
 
-function renderResults(query, scope, results) {
-    elements.resultsSummary.textContent = `Query: "${query}" in ${humanizeScope(scope)}.`;
+function renderResults(query, scope, rankingStrategy, results) {
+    elements.resultsSummary.textContent = `Query: "${query}" in ${humanizeScope(scope)}, ranked by ${humanizeRanking(rankingStrategy)}.`;
 
     if (!results.length) {
         elements.resultsList.innerHTML = [
@@ -205,6 +207,19 @@ function humanizeScope(scope) {
         return "content only";
     }
     return "filename and content";
+}
+
+function humanizeRanking(strategy) {
+    if (strategy === "path") {
+        return "path priority";
+    }
+    if (strategy === "date") {
+        return "newest first";
+    }
+    if (strategy === "popularity") {
+        return "popularity";
+    }
+    return "best match";
 }
 
 function formatScore(score) {

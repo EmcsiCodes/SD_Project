@@ -169,6 +169,26 @@ button {
     gap: 14px;
 }
 
+.advanced-options {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.48);
+    overflow: hidden;
+}
+
+.advanced-options summary {
+    cursor: pointer;
+    padding: 13px 14px;
+    color: var(--accent-strong);
+    font-weight: 700;
+}
+
+.advanced-grid {
+    display: grid;
+    gap: 14px;
+    padding: 0 14px 14px;
+}
+
 .field,
 .toggle-field {
     display: grid;
@@ -276,7 +296,7 @@ button {
 }
 
 .results-panel {
-    min-height: 720px;
+    min-height: 620px;
     display: grid;
     align-content: start;
     gap: 18px;

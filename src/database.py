@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterator
 
 
 def utc_now_iso() -> str:
@@ -15,12 +17,17 @@ class Database:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        conn.execute("PRAGMA journal_mode = WAL;")
-        return conn
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON;")
+            conn.execute("PRAGMA journal_mode = WAL;")
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def init_schema(self) -> None:
         with self._connect() as conn:
@@ -192,8 +199,8 @@ class Database:
                     indexed_at = excluded.indexed_at,
                     status = excluded.status,
                     path_score = excluded.path_score,
-                    access_time = excluded.access_time,
-                    popularity_score = excluded.popularity_score;
+                    access_time = COALESCE(files.access_time, excluded.access_time),
+                    popularity_score = files.popularity_score;
                 """,
                 (
                     file_row["path"],
@@ -264,9 +271,10 @@ class Database:
         return [dict(row) for row in rows]
 
     def search_content(self, terms: list[str], limit: int) -> list[dict[str, Any]]:
-        if not terms:
+        fts_terms = self._normalize_fts_terms(terms)
+        if not fts_terms:
             return []
-        fts_query = " AND ".join(f"{term}*" for term in terms)
+        fts_query = " AND ".join(f"{term}*" for term in fts_terms)
         with self._connect() as conn:
             rows = conn.execute(
                 """
@@ -291,6 +299,17 @@ class Database:
                 (fts_query, limit),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    @staticmethod
+    def _normalize_fts_terms(terms: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for term in terms:
+            for part in re.findall(r"[A-Za-z0-9_]+", str(term).lower()):
+                if part not in seen:
+                    seen.add(part)
+                    normalized.append(part)
+        return normalized
 
     def search_paths(self, terms: list[str], limit: int) -> list[dict[str, Any]]:
         if not terms:

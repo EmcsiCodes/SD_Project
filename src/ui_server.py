@@ -156,6 +156,7 @@ class LocalSearchRequestHandler(BaseHTTPRequestHandler):
             {
                 "query": query,
                 "scope": scope,
+                "ranking_strategy": ranking_strategy,
                 "results": results,
                 "formatted_results": engine.format_results(results),
             },

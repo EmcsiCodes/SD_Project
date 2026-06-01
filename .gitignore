@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
 .local_search.db
+*.db-shm
+*.db-wal
+.codex_check.db
 assignment_details.pdf
 docs/*
-

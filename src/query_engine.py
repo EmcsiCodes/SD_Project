@@ -12,6 +12,7 @@ class RankingStrategy(str, Enum):
     """Available ranking algorithms."""
     TFIDF = "tfidf"
     PATH = "path"
+    DATE = "date"
     POPULARITY = "popularity"
 
 
@@ -42,8 +43,6 @@ class QueryParser:
         parsed = ParsedQuery()
         consumed_spans: list[tuple[int, int]] = []
 
-        # Find all qualifiers like path:value or content:value
-        import re
         pattern = re.compile(
             r'(?P<key>\w+):(?:(?P<quoted>"[^"]*"|\'[^\']*\')|(?P<value>\S+))',
             re.IGNORECASE,
@@ -77,8 +76,7 @@ class QueryParser:
 
     @staticmethod
     def _split_terms(text: str) -> list[str]:
-        parts = re.split(r"[\s/_.\\-]+", text.lower())
-        return [part for part in parts if part]
+        return re.findall(r"[a-z0-9]+", text.lower())
 
     @staticmethod
     def _remove_spans(text: str, spans: list[tuple[int, int]]) -> str:
@@ -112,7 +110,7 @@ class BaseRanker:
 
 
 class TfidfRanker(BaseRanker):
-    """Rank by TF-IDF + filename match."""
+    """Rank by FTS BM25 score plus filename match."""
     def rank(self, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for candidate in candidates:
             filename_score = float(candidate.get("filename_score", 0.0))
@@ -137,6 +135,23 @@ class PathRanker(BaseRanker):
         return sorted(candidates, key=lambda x: (-float(x.get("score", 0.0)), str(x.get("filename", "")).lower()))
 
 
+class DateRanker(BaseRanker):
+    """Rank newest modified files first, with filename matches as a tie-breaker."""
+    def rank(self, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        for candidate in candidates:
+            filename_score = float(candidate.get("filename_score", 0.0))
+            candidate["score"] = round(10.0 + filename_score * 0.2, 2)
+        return sorted(
+            candidates,
+            key=lambda x: (
+                str(x.get("modified_at") or ""),
+                float(x.get("filename_score", 0.0)),
+                str(x.get("filename", "")).lower(),
+            ),
+            reverse=True,
+        )
+
+
 class PopularityRanker(BaseRanker):
     """Rank by popularity (click frequency) + filename."""
     def rank(self, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -158,6 +173,7 @@ def get_ranker(strategy: RankingStrategy | str) -> BaseRanker:
     rankers: dict[RankingStrategy, type[BaseRanker]] = {
         RankingStrategy.TFIDF: TfidfRanker,
         RankingStrategy.PATH: PathRanker,
+        RankingStrategy.DATE: DateRanker,
         RankingStrategy.POPULARITY: PopularityRanker,
     }
     return rankers[strategy]()
@@ -181,6 +197,7 @@ class QueryEngine:
         filename_only: bool = False,
         content_only: bool = False,
     ) -> list[dict[str, object]]:
+        """Parse the query, run the selected search path, and record history."""
         parsed = QueryParser.parse(query_text)
         if not parsed.has_qualifiers():
             results = self._legacy_search(query_text, limit, filename_only, content_only)

@@ -13,10 +13,7 @@
             <div class="hero-copy">
                 <p class="eyebrow">Software Design Project</p>
                 <h1>Local Search Studio</h1>
-                <p class="hero-text">
-                    Index a real folder, search it quickly, and keep the results readable enough
-                    to demo confidently.
-                </p>
+                <p class="hero-text">Index a folder, search the local database, and review clean file matches.</p>
             </div>
             <div class="hero-card">
                 <p class="hero-card-label">Current workspace</p>
@@ -43,27 +40,32 @@
                             <input id="db-path" name="db_path" type="text" placeholder="E:\Projects\search.db" required>
                         </label>
 
-                        <label class="field">
-                            <span>Ignore extensions</span>
-                            <input id="ignore-extensions" name="ignore_extensions" type="text" placeholder=".png,.jpg,.exe">
-                        </label>
+                        <details class="advanced-options">
+                            <summary>Indexing options</summary>
+                            <div class="advanced-grid">
+                                <label class="field">
+                                    <span>Ignore extensions</span>
+                                    <input id="ignore-extensions" name="ignore_extensions" type="text" placeholder=".png,.jpg,.exe">
+                                </label>
 
-                        <label class="field">
-                            <span>Ignore path patterns</span>
-                            <textarea id="ignore-patterns" name="ignore_patterns" rows="3" placeholder="*node_modules*&#10;*.git*"></textarea>
-                        </label>
+                                <label class="field">
+                                    <span>Ignore path patterns</span>
+                                    <textarea id="ignore-patterns" name="ignore_patterns" rows="3" placeholder="*node_modules*&#10;*.git*"></textarea>
+                                </label>
 
-                        <div class="inline-grid">
-                            <label class="field compact">
-                                <span>Max file size (MB)</span>
-                                <input id="max-file-size-mb" name="max_file_size_mb" type="number" min="1" value="2">
-                            </label>
+                                <div class="inline-grid">
+                                    <label class="field compact">
+                                        <span>Max file size (MB)</span>
+                                        <input id="max-file-size-mb" name="max_file_size_mb" type="number" min="1" value="2">
+                                    </label>
 
-                            <label class="toggle-field">
-                                <input id="include-hidden" name="include_hidden" type="checkbox">
-                                <span>Include hidden files</span>
-                            </label>
-                        </div>
+                                    <label class="toggle-field">
+                                        <input id="include-hidden" name="include_hidden" type="checkbox">
+                                        <span>Include hidden files</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </details>
 
                         <button id="index-button" class="primary-button" type="submit">Run Indexing</button>
                     </form>
@@ -95,6 +97,16 @@
                                 </select>
                             </label>
                         </div>
+
+                        <label class="field compact">
+                            <span>Ranking</span>
+                            <select id="ranking-strategy" name="ranking_strategy">
+                                <option value="tfidf">Best match</option>
+                                <option value="path">Path priority</option>
+                                <option value="date">Newest first</option>
+                                <option value="popularity">Popularity</option>
+                            </select>
+                        </label>
 
                         <div class="button-row">
                             <button id="search-button" class="primary-button" type="submit">Search</button>
