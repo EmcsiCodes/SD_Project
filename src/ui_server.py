@@ -13,6 +13,7 @@ from src.database import Database
 from src.indexing_engine import IndexingEngine
 from src.input_parsing import parse_extensions, parse_patterns
 from src.query_engine import QueryEngine, RankingStrategy
+from src.widgets import WidgetFactory
 
 
 @dataclass(frozen=True)
@@ -151,12 +152,14 @@ class LocalSearchRequestHandler(BaseHTTPRequestHandler):
             filename_only=scope == "filename",
             content_only=scope == "content",
         )
+        widgets = WidgetFactory().build_widgets(query, results)
         self._send_json(
             HTTPStatus.OK,
             {
                 "query": query,
                 "scope": scope,
                 "ranking_strategy": ranking_strategy,
+                "widgets": widgets,
                 "results": results,
                 "formatted_results": engine.format_results(results),
             },

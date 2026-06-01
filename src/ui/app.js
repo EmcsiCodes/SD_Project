@@ -8,6 +8,7 @@ const elements = {
     statusBanner: document.getElementById("status-banner"),
     reportGrid: document.getElementById("report-grid"),
     resultsSummary: document.getElementById("results-summary"),
+    widgetsPanel: document.getElementById("widgets-panel"),
     resultsList: document.getElementById("results-list"),
     indexForm: document.getElementById("index-form"),
     searchForm: document.getElementById("search-form"),
@@ -104,6 +105,7 @@ async function onSearchSubmit(event) {
         });
 
         state.lastResults = response.results || [];
+        renderWidgets(response.widgets || []);
         renderResults(response.query, response.scope, response.ranking_strategy, state.lastResults);
         setStatus(
             "success",
@@ -122,6 +124,7 @@ function resetResults() {
     state.lastResults = [];
     elements.query.value = "";
     elements.resultsSummary.textContent = "Search results will appear here after the first query.";
+    elements.widgetsPanel.innerHTML = "";
     elements.resultsList.innerHTML = [
         '<article class="empty-state">',
         "<h3>Results cleared</h3>",
@@ -163,6 +166,24 @@ function renderReport(report) {
         .join("");
 }
 
+function renderWidgets(widgets) {
+    if (!widgets.length) {
+        elements.widgetsPanel.innerHTML = "";
+        return;
+    }
+
+    elements.widgetsPanel.innerHTML = widgets
+        .map(
+            (widget) => `
+                <article class="widget-card">
+                    <p class="widget-title">${escapeHtml(widget.title)}</p>
+                    <p class="widget-description">${escapeHtml(widget.description)}</p>
+                </article>
+            `
+        )
+        .join("");
+}
+
 function renderResults(query, scope, rankingStrategy, results) {
     elements.resultsSummary.textContent = `Query: "${query}" in ${humanizeScope(scope)}, ranked by ${humanizeRanking(rankingStrategy)}.`;
 
@@ -188,6 +209,7 @@ function renderResults(query, scope, rankingStrategy, results) {
                     </div>
                     <p class="result-path"><code>${escapeHtml(result.path)}</code></p>
                     <p class="result-meta"><code>${escapeHtml(result.metadata)}</code></p>
+                    ${renderColorSwatch(result.dominant_color)}
                     ${
                         result.snippet
                             ? `<div class="result-snippet">${escapeHtml(result.snippet)}</div>`
@@ -197,6 +219,18 @@ function renderResults(query, scope, rankingStrategy, results) {
             `
         )
         .join("");
+}
+
+function renderColorSwatch(color) {
+    if (!color) {
+        return "";
+    }
+    return `
+        <div class="color-row">
+            <span class="color-swatch color-${escapeHtml(color)}"></span>
+            <span>Dominant color: ${escapeHtml(color)}</span>
+        </div>
+    `;
 }
 
 function humanizeScope(scope) {
