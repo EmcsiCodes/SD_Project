@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import fnmatch
+import importlib
 import mimetypes
 import os
 import time
 from datetime import datetime, timezone
+from types import ModuleType
 from queue import Queue
 from threading import Lock, Thread
 from typing import Any
-
-try:
-    from PIL import Image
-except ImportError:
-    Image = None
 
 from src.database import Database, utc_now_iso
 
@@ -61,6 +58,7 @@ class ImageFileProcessor(FileProcessor):
         "pink": (220, 100, 170),
         "brown": (120, 75, 35),
     }
+    _image_module: ModuleType | None = None
 
     def can_process(self, extension: str | None, mime_type: str | None) -> bool:
         return bool(
@@ -81,11 +79,12 @@ class ImageFileProcessor(FileProcessor):
         }
 
     def _dominant_color(self, path: str) -> str | None:
-        if Image is None:
+        image_module = self._load_image_module()
+        if image_module is None:
             return None
 
         try:
-            with Image.open(path) as image:
+            with image_module.open(path) as image:
                 image.thumbnail((80, 80))
                 pixels = image.convert("RGB").getdata()
                 counts: dict[str, int] = {}
@@ -95,6 +94,16 @@ class ImageFileProcessor(FileProcessor):
         except Exception:
             return None
         return max(counts, key=counts.get) if counts else None
+
+    @classmethod
+    def _load_image_module(cls) -> ModuleType | None:
+        if cls._image_module is not None:
+            return cls._image_module
+        try:
+            cls._image_module = importlib.import_module("PIL.Image")
+        except ImportError:
+            cls._image_module = None
+        return cls._image_module
 
     def _nearest_color(self, pixel: tuple[int, int, int]) -> str:
         red, green, blue = pixel
