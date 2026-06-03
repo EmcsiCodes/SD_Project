@@ -9,6 +9,11 @@ from queue import Queue
 from threading import Lock, Thread
 from typing import Any
 
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
 from src.database import Database, utc_now_iso
 
 
@@ -76,9 +81,7 @@ class ImageFileProcessor(FileProcessor):
         }
 
     def _dominant_color(self, path: str) -> str | None:
-        try:
-            from PIL import Image
-        except ImportError:
+        if Image is None:
             return None
 
         try:
@@ -256,7 +259,7 @@ class IndexingEngine:
                 finally:
                     result_queue.task_done()
 
-        worker_count = min(4, max(1, (os.cpu_count() or 1)))
+        worker_count = 4
         readers = [Thread(target=reader_worker, daemon=True) for _ in range(worker_count)]
         writer = Thread(target=writer_worker, daemon=True)
         writer.start()
