@@ -1,6 +1,7 @@
 const state = {
     lastReport: null,
     lastResults: [],
+    activeDbPath: "",
 };
 
 const elements = {
@@ -8,6 +9,7 @@ const elements = {
     statusBanner: document.getElementById("status-banner"),
     reportGrid: document.getElementById("report-grid"),
     resultsSummary: document.getElementById("results-summary"),
+    colorShortcuts: document.getElementById("color-shortcuts"),
     widgetsPanel: document.getElementById("widgets-panel"),
     resultsList: document.getElementById("results-list"),
     indexForm: document.getElementById("index-form"),
@@ -44,6 +46,7 @@ async function loadConfig() {
         const config = await sendJson("/api/config", { method: "GET" });
         elements.root.value = config.default_root || ".";
         elements.dbPath.value = config.default_db || ".local_search.db";
+        state.activeDbPath = elements.dbPath.value;
         elements.workingDirectory.textContent = config.working_directory || config.default_root || ".";
         setStatus("info", "Ready. Index a folder or search an existing database.");
     } catch (error) {
@@ -73,10 +76,13 @@ async function onIndexSubmit(event) {
         });
 
         state.lastReport = response.report || null;
+        elements.dbPath.value = response.db_path || elements.dbPath.value;
+        state.activeDbPath = elements.dbPath.value;
         renderReport(state.lastReport);
+        renderColorShortcuts(response.colors || []);
         setStatus(
             "success",
-            `Indexing finished for ${response.root}. ${response.report.files_indexed} files are searchable.`
+            buildIndexStatus(response)
         );
     } catch (error) {
         setStatus("error", error.message);
@@ -105,6 +111,8 @@ async function onSearchSubmit(event) {
         });
 
         state.lastResults = response.results || [];
+        state.activeDbPath = payload.db_path;
+        renderColorShortcuts(response.colors || []);
         renderWidgets(response.widgets || []);
         renderResults(response.query, response.scope, response.ranking_strategy, state.lastResults);
         setStatus(
@@ -166,6 +174,40 @@ function renderReport(report) {
         .join("");
 }
 
+function renderColorShortcuts(colors) {
+    if (!colors.length) {
+        elements.colorShortcuts.innerHTML = [
+            '<p class="shortcut-note">No image colors indexed in this database yet.</p>',
+        ].join("");
+        return;
+    }
+
+    elements.colorShortcuts.innerHTML = colors
+        .map(
+            (item) => `
+                <button class="color-chip" type="button" data-color="${escapeHtml(item.color)}">
+                    <span class="color-swatch color-${escapeHtml(item.color)}"></span>
+                    <span>${escapeHtml(item.color)} (${escapeHtml(item.count)})</span>
+                </button>
+            `
+        )
+        .join("");
+
+    elements.colorShortcuts.querySelectorAll("[data-color]").forEach((button) => {
+        button.addEventListener("click", () => {
+            elements.query.value = `color:${button.dataset.color}`;
+            elements.scope.value = "all";
+            elements.query.focus();
+        });
+    });
+}
+
+function buildIndexStatus(response) {
+    const colorCount = (response.colors || []).reduce((total, item) => total + Number(item.count || 0), 0);
+    const imageText = colorCount ? ` ${colorCount} image file${colorCount === 1 ? "" : "s"} have colors.` : " No image colors were found.";
+    return `Indexing finished. ${response.report.files_indexed} files are searchable.${imageText}`;
+}
+
 function renderWidgets(widgets) {
     if (!widgets.length) {
         elements.widgetsPanel.innerHTML = "";
@@ -201,6 +243,7 @@ function renderResults(query, scope, rankingStrategy, results) {
         .map(
             (result) => `
                 <article class="result-card">
+                    ${renderImagePreview(result)}
                     <div class="result-header">
                         <div>
                             <h3 class="result-title">${escapeHtml(result.filename)}</h3>
@@ -219,6 +262,18 @@ function renderResults(query, scope, rankingStrategy, results) {
             `
         )
         .join("");
+}
+
+function renderImagePreview(result) {
+    if (result.file_type !== "image") {
+        return "";
+    }
+    const url = `/api/image?path=${encodeURIComponent(result.path)}&db_path=${encodeURIComponent(state.activeDbPath)}`;
+    return `
+        <div class="result-image-wrap">
+            <img class="result-image" src="${url}" alt="${escapeHtml(result.filename)}" loading="lazy">
+        </div>
+    `;
 }
 
 function renderColorSwatch(color) {

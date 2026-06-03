@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import webbrowser
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from src.database import Database
 from src.indexing_engine import IndexingEngine
@@ -57,6 +58,9 @@ class LocalSearchRequestHandler(BaseHTTPRequestHandler):
                     "working_directory": os.getcwd(),
                 },
             )
+            return
+        if route == "/api/image":
+            self._handle_image()
             return
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "Route not found."})
 
@@ -113,6 +117,7 @@ class LocalSearchRequestHandler(BaseHTTPRequestHandler):
             {
                 "message": "Indexing complete.",
                 "report": report,
+                "colors": database.get_color_summary(),
                 "root": os.path.abspath(root),
                 "db_path": os.path.abspath(db_path),
             },
@@ -160,10 +165,36 @@ class LocalSearchRequestHandler(BaseHTTPRequestHandler):
                 "scope": scope,
                 "ranking_strategy": ranking_strategy,
                 "widgets": widgets,
+                "colors": database.get_color_summary(),
                 "results": results,
                 "formatted_results": engine.format_results(results),
             },
         )
+
+    def _handle_image(self) -> None:
+        parsed_url = urlparse(self.path)
+        params = parse_qs(parsed_url.query)
+        image_path = params.get("path", [""])[0]
+        db_path = params.get("db_path", [self.server.config.default_db])[0]
+        if not image_path:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Image path is required."})
+            return
+        if not self._is_indexed_image(db_path, image_path):
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "Indexed image not found."})
+            return
+
+        path = Path(image_path)
+        if not path.is_file():
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "Image file no longer exists."})
+            return
+
+        content_type, _ = mimetypes.guess_type(str(path))
+        self._send_bytes(HTTPStatus.OK, path.read_bytes(), content_type or "application/octet-stream")
+
+    def _is_indexed_image(self, db_path: str, image_path: str) -> bool:
+        database = Database(db_path)
+        database.init_schema()
+        return database.is_indexed_image(image_path)
 
     def _read_json_body(self) -> dict[str, object] | None:
         content_length = int(self.headers.get("Content-Length", "0"))

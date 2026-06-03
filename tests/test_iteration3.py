@@ -23,11 +23,13 @@ class Iteration3Tests(unittest.TestCase):
             database = Database(str(root / "search.db"))
             report = IndexingEngine(database).index(str(root), progress_every=0)
             results = QueryEngine(database).search("color:red", limit=5)
+            scoped_results = QueryEngine(database).search("color:red", limit=5, content_only=True)
 
         self.assertGreaterEqual(report["files_indexed"], 1)
         self.assertEqual(results[0]["filename"], "red_square.png")
         self.assertEqual(results[0]["file_type"], "image")
         self.assertEqual(results[0]["dominant_color"], "red")
+        self.assertEqual(scoped_results[0]["filename"], "red_square.png")
 
     def test_query_preprocessor_pipeline_sanitizes_and_expands(self) -> None:
         processed = build_default_query_builder().build("img!!! color:red")

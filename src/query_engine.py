@@ -239,7 +239,7 @@ class QueryEngine:
         if content_terms and not filename_only:
             content_rows = self.database.search_content(content_terms, pool_size)
         color_rows = []
-        if parsed.color_terms and not content_only:
+        if parsed.color_terms:
             color_rows = self.database.search_color(parsed.color_terms, pool_size)
 
         for row in path_rows:
@@ -279,7 +279,7 @@ class QueryEngine:
 
         required_path = bool(parsed.path_terms and not content_only)
         required_content = bool(content_terms and not filename_only)
-        required_color = bool(parsed.color_terms and not content_only)
+        required_color = bool(parsed.color_terms)
         results = self._build_results(candidates, parsed.all_terms())
         results = [
             result

@@ -361,6 +361,34 @@ class Database:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def get_color_summary(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT dominant_color AS color, COUNT(*) AS count
+                FROM files
+                WHERE file_type = 'image'
+                  AND dominant_color IS NOT NULL
+                GROUP BY dominant_color
+                ORDER BY count DESC, dominant_color ASC;
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def is_indexed_image(self, path: str) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM files
+                WHERE path = ?
+                  AND file_type = 'image'
+                LIMIT 1;
+                """,
+                (path,),
+            ).fetchone()
+        return row is not None
+
     def add_search_history(self, query: str, searched_at: str, results_count: int = 0) -> None:
         with self._connect() as conn:
             conn.execute(

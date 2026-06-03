@@ -35,14 +35,14 @@
                             <input id="root" name="root" type="text" placeholder="E:\Projects\MyFolder" required>
                         </label>
 
-                        <label class="field">
-                            <span>Database path</span>
-                            <input id="db-path" name="db_path" type="text" placeholder="E:\Projects\search.db" required>
-                        </label>
-
                         <details class="advanced-options">
                             <summary>Indexing options</summary>
                             <div class="advanced-grid">
+                                <label class="field">
+                                    <span>Database path</span>
+                                    <input id="db-path" name="db_path" type="text" placeholder="E:\Projects\search.db" required>
+                                </label>
+
                                 <label class="field">
                                     <span>Ignore extensions</span>
                                     <input id="ignore-extensions" name="ignore_extensions" type="text" placeholder=".png,.jpg,.exe">
@@ -82,31 +82,38 @@
                             <input id="query" name="query" type="text" placeholder="architecture, img, color:red" required>
                         </label>
 
-                        <div class="inline-grid">
-                            <label class="field compact">
-                                <span>Result limit</span>
-                                <input id="limit" name="limit" type="number" min="1" max="100" value="10">
-                            </label>
+                        <div id="color-shortcuts" class="color-shortcuts"></div>
 
-                            <label class="field compact">
-                                <span>Scope</span>
-                                <select id="scope" name="scope">
-                                    <option value="all">Filename + content</option>
-                                    <option value="filename">Filename only</option>
-                                    <option value="content">Content only</option>
-                                </select>
-                            </label>
-                        </div>
+                        <details class="advanced-options">
+                            <summary>Search options</summary>
+                            <div class="advanced-grid">
+                                <div class="inline-grid">
+                                    <label class="field compact">
+                                        <span>Result limit</span>
+                                        <input id="limit" name="limit" type="number" min="1" max="100" value="10">
+                                    </label>
 
-                        <label class="field compact">
-                            <span>Ranking</span>
-                            <select id="ranking-strategy" name="ranking_strategy">
-                                <option value="tfidf">Best match</option>
-                                <option value="path">Path priority</option>
-                                <option value="date">Newest first</option>
-                                <option value="popularity">Popularity</option>
-                            </select>
-                        </label>
+                                    <label class="field compact">
+                                        <span>Scope</span>
+                                        <select id="scope" name="scope">
+                                            <option value="all">Filename + content</option>
+                                            <option value="filename">Filename only</option>
+                                            <option value="content">Content only</option>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <label class="field compact">
+                                    <span>Ranking</span>
+                                    <select id="ranking-strategy" name="ranking_strategy">
+                                        <option value="tfidf">Best match</option>
+                                        <option value="path">Path priority</option>
+                                        <option value="date">Newest first</option>
+                                        <option value="popularity">Popularity</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </details>
 
                         <div class="button-row">
                             <button id="search-button" class="primary-button" type="submit">Search</button>
